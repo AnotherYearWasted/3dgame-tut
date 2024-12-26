@@ -1,40 +1,81 @@
 import { Environment, OrbitControls } from "@react-three/drei";
-import { ButtonOptions, insertCoin, Joystick, myPlayer, onPlayerJoin, PlayerState } from "playroomkit";
+import { insertCoin, isHost, Joystick, myPlayer, onPlayerJoin, PlayerState, useMultiplayerState } from "playroomkit";
 import Map from "./Map";
 import { useEffect, useState } from "react";
 import CharacterController from "./CharacterController";
-import { Physics } from "@react-three/rapier";
+import Bullet, { BulletProps } from "./Bullet";
+
+interface Player {
+  state: PlayerState;
+  joyStick: Joystick;
+}
+
+const initialState = {
+  health: "100",
+  dealths: "0",
+  kills: "0",
+  weapon: "AK"
+}
+
+export interface BulletType extends BulletProps {
+  id: string;
+}
 
 export const Experience = () => {
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [bullets, setBullets] = useState<BulletType[]>([]);
+  const [networkBullets, setNetworkBullets] = useMultiplayerState<BulletType[]>("bullets", []);
+  const [isLaunch, setIsLaunch] = useMultiplayerState<boolean>("isLaunch", false);
 
-  const [players, setPlayers] = useState<{ state: PlayerState; joyStick: Joystick }[]>([]);
-  console.log(players)
-  const start = async () => {
-    await insertCoin();
+  useEffect(() => {
+    setNetworkBullets(bullets);
+  }, [bullets])
+
+  const onFire = (bullet: BulletType) => {
+    setBullets((bullets) => [...bullets, bullet]);
   }
+
+  const onHit = (bulletId: string) => {
+    setBullets((bullets) => bullets.filter((b) => b.id !== bulletId));
+  }
+
+  const start = async () => {
+
+    await insertCoin();
+
+    
+
+  };
 
   useEffect(() => {
     start();
-  
-    onPlayerJoin((state) => {
+
+    onPlayerJoin((state: PlayerState) => {
+
+      console.log("Player joined", state.id, state.getProfile());
+
       const joyStick = new Joystick(state, {
         type: "angular",
-        buttons: [{ id: "fire", label: "Fire" }],
+        buttons: [
+          {
+            id: "fire",
+            label: "Fire",
+          }
+        ]
       });
-  
-      const newPlayer = { state, joyStick };
-      state.setState("health", 100);
-      state.setState("death", 0);
-      state.setState("kills", 0);
-  
-      setPlayers((prevPlayers) => [...prevPlayers, newPlayer]);
-  
+      const newPlayer: Player = { state, joyStick };
+
+      for (const [key, value] of Object.entries(initialState)) {
+        state.setState(key, value);
+      }
+
+      setPlayers((players) => [...players, newPlayer]);
+
       state.onQuit(() => {
-        setPlayers((prevPlayers) =>
-          prevPlayers.filter((player) => player.state.id !== state.id)
-        );
-      });
+        setPlayers((players) => players.filter((p) => p.state.id !== state.id));
+      })
     });
+
   }, []);
 
   return (
@@ -53,20 +94,21 @@ export const Experience = () => {
         shadow-mapSize-height={4096}
         shadow-bias={-0.0001}
       />
-      <OrbitControls />
       <Map />
+      {players.map(({ state, joyStick }, i) => (
+        <CharacterController
+          onFire={onFire}
+          key={`${state.id}`} // Ensure uniqueness
+          playerState={state}
+          joystick={joyStick}
+          userPlayer={state.id === myPlayer()?.id}
+          position-x={i * 2}
+        />
+      ))}
       {
-        players.map(({ state, joyStick }, i) => {
-          return (
-            <CharacterController
-              key={state.id}
-              state={state}
-              joystick={joyStick}
-              userPlayer={state.id === myPlayer()?.id}
-              position-x={i * 2}
-            />
-          )
-        })
+        (isHost() ? bullets : networkBullets).map((bullet) => (
+          <Bullet key={bullet.id} {...bullet} onHit={(id) => onHit(bullet.id)} />
+        ))
       }
       <Environment preset="sunset" />
     </>
