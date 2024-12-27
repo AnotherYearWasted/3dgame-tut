@@ -15,9 +15,12 @@
     "@react-three/postprocessing": "^2.16.3",
     "@react-three/rapier": "^1.5.0",
     "@types/three": "^0.171.0",
+    "autoprefixer": "^10.4.20",
     "playroomkit": "^0.0.84",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "tailwind": "^4.0.0",
+    "tailwindcss": "^3.4.17",
     "three": "^0.171.0",
     "three-stdlib": "^2.35.2",
     "typescript": "^5.7.2"

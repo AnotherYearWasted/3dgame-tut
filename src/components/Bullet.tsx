@@ -14,6 +14,11 @@ export interface BulletProps {
   onHit: (bulletId: string) => void,
 }
 
+export interface BulletData {
+  type: "bullet",
+  fromPlayerId: string,
+  damage: number
+}
 
 const Bullet = ({
   fromPlayerId,
@@ -46,10 +51,9 @@ const Bullet = ({
     <group position={[position.x, position.y, position.z]} rotation-y={angle}>
       <group position={WEAPON_OFFSET}>
         <RigidBody ref={rigidBodyRef} gravityScale={0} sensor onIntersectionEnter={(e) => {
-          const userData = e.other.rigidBody?.userData as { type?: string };
+          const userData = e.other.rigidBody?.userData as BulletData;
           if (isHost() && userData?.type !== 'bullet') {
             rigidBodyRef.current?.setEnabled(false);
-            console.log("Bullet Hit!", e.other.rigidBody?.userData);
             onHit("");
           }
         }}
@@ -58,7 +62,7 @@ const Bullet = ({
               type: 'bullet',
               fromPlayerId: fromPlayerId,
               damage: 10
-            }
+            } as BulletData
           }>
           <mesh position-z={0.25} material={bulletMaterial} castShadow>
             <boxGeometry args={[0.05, 0.05, 0.5]} />

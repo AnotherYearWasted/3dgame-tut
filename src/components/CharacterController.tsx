@@ -1,16 +1,17 @@
 import { isHost, Joystick, PlayerState } from "playroomkit";
 import * as THREE from 'three';
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import CharacterSoldier from "./CharacterSoldier";
 import { CapsuleCollider, RigidBody } from "@react-three/rapier";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { RapierRigidBody } from "@react-three/rapier";
 import { OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import { CameraControlsProps } from "@react-three/drei";
 import { CameraControls } from "@react-three/drei";
-import { BulletProps } from "./Bullet";
+import { BulletData, BulletProps } from "./Bullet";
 import Crosshair from "./Crosshair";
 import { BulletType } from "./Experience";
+import PlayerInfo from "./PlayerInfo";
 
 const MOVEMENT_SPEED = 100;
 const FIRE_RATE = 380;
@@ -26,6 +27,7 @@ interface CharacterControllerProps {
   joystick: Joystick,
   userPlayer: boolean,
   onFire: (bullet: BulletType) => void,
+  onKilled: (playerId: string, fromPlayerId: string) => void,
   [key: string]: any
 }
 
@@ -34,6 +36,7 @@ const CharacterController = ({
   joystick,
   userPlayer,
   onFire,
+  onKilled,
   ...props
 }: CharacterControllerProps) => {
 
@@ -42,7 +45,31 @@ const CharacterController = ({
   const [animation, setAnimation] = useState("Idle");
   const rigidBodyRef = useRef<RapierRigidBody>(null);
   const cameraControlsRef = useRef<CameraControls>(null);
+  const scene = useThree((state) => state.scene);
 
+  const spawnRandomly = () => {
+    const spawns = [];
+    for (let i = 0; i < 1000; ++i) {
+      const spawn = scene.getObjectByName(`spawn_${i}`);
+      if (spawn) {
+        spawns.push(spawn);
+      }
+      else {
+        break;
+      }
+    }
+
+    const spawnPos: THREE.Vector3 = spawns[Math.floor(Math.random() * spawns.length)].position;
+
+    rigidBodyRef.current?.setTranslation(spawnPos, true);
+  }
+
+
+  useEffect(() => {
+    if (isHost()) {
+      spawnRandomly();
+    }
+  }, []);
 
   useFrame((state, delta) => {
 
@@ -62,6 +89,11 @@ const CharacterController = ({
           playerWorldPosition.z
         )
       }
+    }
+
+    if (playerState.getState("dead")) {
+      setAnimation("Death");
+      return
     }
 
     if (joystick.isJoystickPressed()) {
@@ -128,13 +160,40 @@ const CharacterController = ({
       }
       <RigidBody colliders={false} ref={rigidBodyRef} linearDamping={12} lockRotations type={
         isHost() ? "dynamic" : "kinematicPosition"
-      }>
+      }
+        onIntersectionEnter={({ other }) => {
+          const bulletData = other.rigidBody?.userData as BulletData;
+          if (isHost() && bulletData && playerState.getState("health") > 0) {
+
+            const newHealth = playerState.getState("health") - bulletData.damage;
+
+            if (newHealth <= 0) {
+              playerState.setState("health", 0);
+              playerState.setState("dealths", parseInt(playerState.getState("dealths")) + 1);
+              playerState.setState("dead", true);
+              rigidBodyRef.current?.setEnabled(false);
+              setTimeout(() => {
+                spawnRandomly();
+                rigidBodyRef.current?.setEnabled(true);
+                playerState.setState("dead", false);
+                playerState.setState("health", 100);
+              }, 2000);
+              onKilled(playerState.id, bulletData.fromPlayerId);
+            }
+            else {
+              playerState.setState("health", newHealth);
+            }
+
+          }
+        }}
+      >
+        <PlayerInfo playerState={playerState} />
         <group ref={characterRef}>
           <CharacterSoldier
             color={"black"}
             animation={animation}
           />
-          { userPlayer && <Crosshair position={WEAPON_OFFSET} /> }
+          {userPlayer && <Crosshair position={WEAPON_OFFSET} />}
         </group>
         <CapsuleCollider args={[0.7, 0.6]} position={[0, 1.28, 0]} />
       </RigidBody>

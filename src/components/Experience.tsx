@@ -39,12 +39,13 @@ export const Experience = () => {
     setBullets((bullets) => bullets.filter((b) => b.id !== bulletId));
   }
 
+  const onKilled = (playerId: string, fromPlayerId: string) => {
+  
+  }
+
   const start = async () => {
 
     await insertCoin();
-
-    
-
   };
 
   useEffect(() => {
@@ -103,6 +104,7 @@ export const Experience = () => {
           joystick={joyStick}
           userPlayer={state.id === myPlayer()?.id}
           position-x={i * 2}
+          onKilled={onKilled}
         />
       ))}
       {
